@@ -1,0 +1,37 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
+    }
+
+    match /comments/{commentId} {
+      // Public can read published comments
+      // Creator can read all comments on their posts
+      allow read: if resource.data.status == 'published' || 
+                  (request.auth != null && get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.creatorId == request.auth.uid) ||
+                  (request.auth != null && request.auth.token.email == resource.data.commenterEmail);
+      
+      // Magic link users can create comments
+      allow create: if request.auth != null;
+      
+      // Only the post creator can update (moderate) or delete comments
+      allow update, delete: if request.auth != null && 
+        get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.creatorId == request.auth.uid;
+    }
+
+    match /reactions/{reactionId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if false; 
+    }
+  }
+}
